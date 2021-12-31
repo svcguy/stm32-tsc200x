@@ -27,8 +27,12 @@ extern "C" {
 // Goto to tsc200x_conf.c to change these
 // to suit your application
 extern TSC200X_IO_t     TSC200X_IO_Drv;
-extern TSC200X_CTX_t    TSC200X_Ctx_Drv;
 extern TSC200X_Object_t TSC200X;
+
+// Default read/write functions.  Goto to tsc200x_conf.c to
+// change these if needed
+int32_t tsc200x_write(uint16_t reg, uint8_t* data, uint16_t len);
+int32_t tsc200x_read(uint16_t reg, uint8_t* data, uint16_t len);
 
 #ifdef __cplusplus
 }

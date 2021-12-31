@@ -31,37 +31,17 @@ TSC200X_TS_Drv_t TSC200X_TS_Driver =
     TSC200X_ITStatus
 };
 
-// ====================
-// Private Functions
-// ====================
-
-static int32_t tsc200x_write_reg(TSC200X_CTX_t *ctx, uint8_t reg, uint8_t *pbuf, uint16_t length)
-{
-    return ctx->WriteReg(ctx->handle, reg, pbuf, length);
-}
-static int32_t tsc200x_read_reg(TSC200X_CTX_t *ctx, uint8_t reg, uint8_t *pbuf, uint16_t length)
-{
-    return ctx->ReadReg(ctx->handle, reg, pbuf, length);
-}
-
-static int32_t tsc200x_detectTouch(TSC200X_Obj_t *pObj, uint8_t *pData, uint32_t length)
-{
-    int32_t ret;
-
-    return ret;
-}
-
 /**
   * @brief  Register IO bus to component object
   * @param  pObj    object pointer
   * @param  pIO     io structure pointer
   * @retval error status
   */
-int32_t TSC200X_RegisterBusIO (TSC200X_Object_t *pObj, TSC200X_IO_t *pIO)
+int32_t TSC200X_RegisterBusIO(TSC200X_Object_t *pObj, TSC200X_IO_t *pIO)
 {
     int32_t ret = TSC200X_OK;
 
-    if(pObj == NULL)
+    if(pObj == NULL || pIO == NULL)
     {
         ret = TSC200X_ERROR;
     }
@@ -73,10 +53,8 @@ int32_t TSC200X_RegisterBusIO (TSC200X_Object_t *pObj, TSC200X_IO_t *pIO)
         pObj->IO.WriteReg   = pIO->WriteReg;
         pObj->IO.ReadReg    = pIO->ReadReg;
         pObj->IO.GetTick    = pIO->GetTick;
-
-        pObj->Ctx.ReadReg   = ReadRegWrap;
-        pObj->Ctx.WriteReg  = WriteRegWrap;
-        pObj->Ctx.handle    = pObj;
+        pObj->IO.Delay      = pIO->Delay;
+        pObj->IO.Handle     = pIO->Handle;
 
         if(pObj->IO.Init != NULL)
         {
@@ -91,30 +69,29 @@ int32_t TSC200X_RegisterBusIO (TSC200X_Object_t *pObj, TSC200X_IO_t *pIO)
     return ret;
 }
 
-int32_t TSC200X_Init(TSC200X_Object_t *pObj)
-{
-
-}
-
 /**
-  * @brief  De-Initialize the TSC200X communication bus
-  *         from MCU to EXC7200 : ie I2C channel initialization (if required).
-  * @param  pObj    Component object pointer
-  * @retval Component status
+  * @brief  Initialize the TSC200X communication bus
+  * @param  pObj        Component object pointer
+  * @retval Component status.
   */
-int32_t TSC200X_DeInit(TSC200X_Object_t *pObj)
+int32_t TSC200X_Init(TSC200X_Object_t *pObj)
 {
     int32_t ret = TSC200X_OK;
 
-    if(pObj.isInitialized)
+    if(pObj == NULL || pObj->IO.Init == NULL)
     {
-        if(pObj->IO.DeInit() != TSC200X_OK)
+        return TSC200X_ERROR;
+    }
+
+    if(!pObj->IsInitialized)
+    {
+        if(pObj->IO.Init() != TSC200X_OK)
         {
             return TSC200X_ERROR;
         }
         else
         {
-            pObj.isInitialized = 0;
+            pObj->IsInitialized = 1;
         }
     }
 
@@ -122,15 +99,45 @@ int32_t TSC200X_DeInit(TSC200X_Object_t *pObj)
 }
 
 /**
-  * @brief  Configure the EXC7200 gesture
+  * @brief  De-Initialize the TSC200X communication bus
+  * @param  pObj    Component object pointer
+  * @retval Component status
+  */
+int32_t TSC200X_DeInit(TSC200X_Object_t *pObj)
+{
+    int32_t ret = TSC200X_OK;
+
+    if(pObj == NULL || pObj->IO.DeInit == NULL)
+    {
+        return TSC200X_ERROR;
+    }
+
+    if(pObj->IsInitialized)
+    {
+        if(pObj->IO.DeInit() != TSC200X_OK)
+        {
+            return TSC200X_ERROR;
+        }
+        else
+        {
+            pObj->IsInitialized = 0;
+        }
+    }
+
+    return ret;
+}
+
+/**
+  * @brief  Configure the TSC200X gesture
   * @param  pObj        Component object pointer
   * @param  GestureInit Gesture init structure
   * @retval Component status
   */
 int32_t TSC200X_GestureConfig(TSC200X_Object_t *pObj, TSC200X_Gesture_Init_t *GestureInit)
 {
-    /* Prevent unused argument(s) compilation warning */  
+    /* Prevent unused argument(s) compilation warning */ 
     (void)(pObj);
+    (void)(GestureInit);
 
     /* Feature not supported */
     return TSC200X_ERROR;
@@ -153,9 +160,53 @@ int32_t TSC200X_ReadID(TSC200X_Object_t *pObj, uint32_t *Id)
     return TSC200X_ERROR;
 }
 
+/**
+ * @brief   Get the touch state * 
+ * @param   pObj    Component object pointer
+ * @param   State   State structure.  State.TouchDetected
+ *                  will be set to 1 if a touch is detected
+ *                  and the x and y will be filled.  If
+ *                  no touch is detected, TouchDetected will
+ *                  be set to 0
+ * @return Component Status
+ */
 int32_t TSC200X_GetState(TSC200X_Object_t *pObj, TSC200X_State_t *State)
 {
+    int32_t ret = TSC200X_OK;
+    uint8_t buf[2];
 
+    // Activate X and Y drivers
+    pObj->IO.WriteReg((TSC200X_ACTIVATE_YP_XN | TSC200X_ADC_ON_IRQ_DIS0 | TSC200X_8BIT), buf, 1);
+
+    // Delay
+    pObj->IO.Delay(1);
+
+    // Check Z1 to see if there is a touch occuring
+    pObj->IO.ReadReg((TSC200X_MEASURE_Z1 | TSC200X_ADC_ON_IRQ_DIS0 | TSC200X_12BIT), buf, 2);
+    int16_t z1 = (((int16_t)buf[0]) << 4) | ((int16_t)buf[1]);
+    if(z1 < 50)
+    {
+        State->TouchDetected = 0;
+        return TSC200X_OK;
+    }
+
+    // Read X
+    pObj->IO.WriteReg((TSC200X_ACTIVATE_XN | TSC200X_ADC_ON_IRQ_DIS0 | TSC200X_12BIT), buf, 1);
+    pObj->IO.Delay(1);
+    pObj->IO.ReadReg((TSC200X_MEASURE_X | TSC200X_ADC_ON_IRQ_DIS0 | TSC200X_12BIT), buf, 2);
+    int16_t x = (((int16_t)buf[0]) << 4) | ((int16_t)buf[1]);
+
+    // Read Y
+    pObj->IO.WriteReg((TSC200X_ACTIVATE_YN | TSC200X_ADC_ON_IRQ_DIS0 | TSC200X_12BIT), buf, 1);
+    pObj->IO.Delay(1);
+    pObj->IO.ReadReg((TSC200X_MEASURE_Y | TSC200X_ADC_ON_IRQ_DIS0 | TSC200X_12BIT), buf, 2);
+    int16_t y = (((int16_t)buf[0]) << 4) | ((int16_t)buf[1]);
+
+    State->TouchDetected = 1;
+    State->TouchX = (uint32_t)x;
+    State->TouchY = (uint32_t)y;
+
+    return ret;
 }
 
 /**
@@ -189,16 +240,53 @@ int32_t TSC200X_GetGesture(TSC200X_Object_t *pObj, uint8_t *GestureId)
     /* Feature not supported */
     return TSC200X_ERROR;
 }
-}
 
+/**
+  * @brief  Enable interrupts, set PD0 = 1
+  * @param  pObj        Component object pointer
+  * @retval Component status.
+  */
 int32_t TSC200X_EnableIT(TSC200X_Object_t *pObj)
 {
+    int32_t ret = TSC200X_OK;
 
+    if(pObj == NULL)
+    {
+        return TSC200X_ERROR;
+    }
+
+    uint8_t reg = 0x00;
+
+    if(pObj->IO.ReadReg(TSC200X_SETUP, &reg, 1) != TSC200X_OK)
+    {
+        return TSC200X_FAIL;
+    }
+
+    return ret;
 }
 
+/**
+  * @brief  Disable interrupts, set PD0 = 0
+  * @param  pObj        Component object pointer
+  * @retval Component status.
+  */
 int32_t TSC200X_DisableIT(TSC200X_Object_t *pObj)
 {
+    int32_t ret = TSC200X_OK;
 
+    if(pObj == NULL)
+    {
+        return TSC200X_ERROR;
+    }
+
+    uint8_t reg = 0x00;
+
+    if(pObj->IO.ReadReg(TSC200X_SETUP, &reg, 1) != TSC200X_OK)
+    {
+        return TSC200X_FAIL;
+    }
+
+    return ret;
 }
 
 /**
@@ -247,7 +335,7 @@ int32_t TSC200X_GetCapabilities(TSC200X_Object_t *pObj, TSC200X_Capabilities_t *
 
     /* Store component's capabilities */
     Capabilities->MultiTouch    = 0;
-    Capabilities->Getsture      = 0;
+    Capabilities->Gesture       = 0;
     Capabilities->MaxTouch      = TSC200X_MAX_NB_TOUCH;
     Capabilities->MaxXl         = TSC200X_MAX_WIDTH;
     Capabilities->MaxYl         = TSC200X_MAX_HEIGHT;

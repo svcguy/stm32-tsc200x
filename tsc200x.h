@@ -14,7 +14,7 @@
 #ifndef _TSC2003_H
 #define _TSC2003_H
 
-#include "stm32f7xx_hal.h"
+#include "stm32h7xx_hal.h"
 
 // =======================
 // Defines
@@ -67,22 +67,12 @@ extern "C" {
 // =======================
 // Public Types
 // =======================
-typedef int32_t (*TSC200X_Init_Func)        (void);
-typedef int32_t (*TSC200X_DeInit_Func)      (void);
-typedef uint32_t (*TSC200X_GetTick_Func)    (void);
-typedef int32_t (*TSC200X_Delay_Func)       (uint32_t);
-typedef int32_t (*TSC200X_WriteReg_Func)    (uint16_t, uint8_t*, uint16_t);
-typedef int32_t (*TSC200X_ReadReg_Func)     (uint16_t, uint8_t*, uint16_t);
-typedef int32_t (*TSC200X_Read_Func)        (void*, uint8_t, uint8_t*, uint16_t);
-typedef int32_t (*TSC200X_Write_Func)       (void*, uint8_t, uint8_t*, uint16_t);
-
-typedef struct
-{
-    TSC200X_Write_Func  WriteReg;
-    TSC200X_Read_Func   ReadReg;
-    void                *handle;
-}
-TSC200X_CTX_t;
+typedef int32_t     (*TSC200X_Init_Func)        (void);
+typedef int32_t     (*TSC200X_DeInit_Func)      (void);
+typedef uint32_t    (*TSC200X_GetTick_Func)     (void);
+typedef void        (*TSC200X_Delay_Func)       (uint32_t);
+typedef int32_t     (*TSC200X_WriteReg_Func)    (uint16_t, uint8_t*, uint16_t);
+typedef int32_t     (*TSC200X_ReadReg_Func)     (uint16_t, uint8_t*, uint16_t);
 
 typedef struct
 {
@@ -93,6 +83,7 @@ typedef struct
     TSC200X_ReadReg_Func    ReadReg;
     TSC200X_GetTick_Func    GetTick;
     TSC200X_Delay_Func      Delay;
+    void                    *Handle;
 }
 TSC200X_IO_t;
 
@@ -113,12 +104,11 @@ typedef struct
     uint32_t    TouchEvent[TSC200X_MAX_NB_TOUCH];
     uint32_t    TouchArea[TSC200X_MAX_NB_TOUCH];
 }
-TSC2000X_MultiTouch_State_t;
+TSC200X_MultiTouch_State_t;
 
 typedef struct
 {
     TSC200X_IO_t    IO;
-    TSC200X_CTX_t   Ctx;
     uint8_t         IsInitialized;
 }
 TSC200X_Object_t;
