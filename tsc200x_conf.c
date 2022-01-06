@@ -13,7 +13,7 @@
 #include "tsc200x.h"
 #include "tsc200x_conf.h"
 // Your includes
-#include "main.h"
+#include "i2c.h"
 #include "stm32h7xx_hal.h"
 
 // =====================================
@@ -22,13 +22,13 @@
 TSC200X_Object_t TSC200X =
 {
     .IO.Address = TSC200X_ADDR,
-    .IO.Init = i2c_init,
+    .IO.Init = NULL,
     .IO.DeInit = NULL,
     .IO.ReadReg = tsc200x_read,
     .IO.WriteReg = tsc200x_write,
     .IO.GetTick = HAL_GetTick,
     .IO.Delay = HAL_Delay,
-    .IO.Handle = (void *)&hi2c1
+    .IO.Handle = (void *)&hi2c4
 };
 
 /**

@@ -14,6 +14,9 @@
 #include "tsc200x.h"
 #include "tsc200x_conf.h"
 
+#define NUM_ADC_READINGS    8
+#define Z_TOUCH_THRESH      150
+
 // Touch screen driver structure initialization
 TSC200X_TS_Drv_t TSC200X_TS_Driver =
 {
@@ -174,6 +177,12 @@ int32_t TSC200X_GetState(TSC200X_Object_t *pObj, TSC200X_State_t *State)
 {
     int32_t ret = TSC200X_OK;
     uint8_t buf[2];
+    int16_t z1[NUM_ADC_READINGS];
+    uint32_t z1_avg;
+    int16_t x[NUM_ADC_READINGS];
+    uint32_t x_avg;
+    int16_t y[NUM_ADC_READINGS];
+    uint32_t y_avg;
 
     // Activate X and Y drivers
     pObj->IO.WriteReg((TSC200X_ACTIVATE_YP_XN | TSC200X_ADC_ON_IRQ_DIS0 | TSC200X_8BIT), buf, 1);
@@ -182,29 +191,63 @@ int32_t TSC200X_GetState(TSC200X_Object_t *pObj, TSC200X_State_t *State)
     pObj->IO.Delay(1);
 
     // Check Z1 to see if there is a touch occuring
-    pObj->IO.ReadReg((TSC200X_MEASURE_Z1 | TSC200X_ADC_ON_IRQ_DIS0 | TSC200X_12BIT), buf, 2);
-    int16_t z1 = (((int16_t)buf[0]) << 4) | ((int16_t)buf[1]);
-    if(z1 < 50)
+    z1_avg = 0;
+    for(int i=0; i<NUM_ADC_READINGS; i++)
+    {
+      pObj->IO.ReadReg((TSC200X_MEASURE_Z1 | TSC200X_ADC_ON_IRQ_DIS0 | TSC200X_12BIT), buf, 2);
+      z1[i] = (((int16_t)buf[0]) << 4) | ((int16_t)buf[1]);
+    }
+
+    for(int i=0; i<NUM_ADC_READINGS; i++)
+    {
+      z1_avg += z1[i];
+    }
+    z1_avg /= NUM_ADC_READINGS;
+
+
+    if(z1_avg < Z_TOUCH_THRESH)
     {
         State->TouchDetected = 0;
+        State->TouchX = 0;
+        State->TouchY = 0;
         return TSC200X_OK;
     }
 
     // Read X
     pObj->IO.WriteReg((TSC200X_ACTIVATE_XN | TSC200X_ADC_ON_IRQ_DIS0 | TSC200X_12BIT), buf, 1);
     pObj->IO.Delay(1);
-    pObj->IO.ReadReg((TSC200X_MEASURE_X | TSC200X_ADC_ON_IRQ_DIS0 | TSC200X_12BIT), buf, 2);
-    int16_t x = (((int16_t)buf[0]) << 4) | ((int16_t)buf[1]);
+    for(int i=0; i<NUM_ADC_READINGS; i++)
+    {
+      pObj->IO.ReadReg((TSC200X_MEASURE_X | TSC200X_ADC_ON_IRQ_DIS0 | TSC200X_12BIT), buf, 2);
+      x[i] = (((int16_t)buf[0]) << 4) | ((int16_t)buf[1]);
+    }
+
+    x_avg = 0;
+    for(int i=0; i<NUM_ADC_READINGS; i++)
+    {
+      x_avg += x[i];
+    }
+    x_avg /= NUM_ADC_READINGS;
 
     // Read Y
     pObj->IO.WriteReg((TSC200X_ACTIVATE_YN | TSC200X_ADC_ON_IRQ_DIS0 | TSC200X_12BIT), buf, 1);
     pObj->IO.Delay(1);
-    pObj->IO.ReadReg((TSC200X_MEASURE_Y | TSC200X_ADC_ON_IRQ_DIS0 | TSC200X_12BIT), buf, 2);
-    int16_t y = (((int16_t)buf[0]) << 4) | ((int16_t)buf[1]);
+    for(int i=0; i<NUM_ADC_READINGS; i++)
+    {
+      pObj->IO.ReadReg((TSC200X_MEASURE_Y | TSC200X_ADC_ON_IRQ_DIS0 | TSC200X_12BIT), buf, 2);
+      y[i] = (((int16_t)buf[0]) << 4) | ((int16_t)buf[1]);
+    }
+
+    y_avg = 0;
+    for(int i=0; i<NUM_ADC_READINGS; i++)
+    {
+      y_avg += y[i];
+    }
+    y_avg /= NUM_ADC_READINGS;
 
     State->TouchDetected = 1;
-    State->TouchX = (uint32_t)x;
-    State->TouchY = (uint32_t)y;
+    State->TouchX = (x_avg * TSC200X_X_SIZE) / 4096;
+    State->TouchY = (y_avg * TSC200X_Y_SIZE) / 4096;
 
     return ret;
 }
